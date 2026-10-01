@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MPI - Siklus Air & Konservasi</title>
+    <!-- Memuat Tailwind CSS melalui CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        kemenag: {
+                            green: '#065f46', // Hijau Islami (Tua)
+                            light: '#10b981', // Hijau Muda
+                            gold: '#d97706',  // Emas Elegan
+                            yellow: '#fbbf24'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Gaya kustom dasar */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
+        
+        #sim-canvas {
+            position: relative;
+            width: 100%;
+            height: 350px;
+            background: linear-gradient(to bottom, #87CEEB 0%, #E0F6FF 100%);
+            overflow: hidden;
+            border-radius: 0.75rem;
+            border: 4px solid #065f46;
+            transition: background 1s ease;
+        }
+
+        /* Matahari */
+        .sun {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+            background-color: #fbbf24;
+            border-radius: 50%;
+            box-shadow: 0 0 40px #fbbf24;
+            transition: all 1s ease;
+        }
+
+        /* Daratan & Air */
+        .land {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 40%;
+            height: 30%;
+            background: linear-gradient(to top, #4d7c0f, #65a30d);
+            border-top-right-radius: 100%;
+            z-index: 10;
+        }
+        .water {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 100%;
+            height: 25%;
+            background: linear-gradient(to bottom, #3b82f6, #1d4ed8);
+            z-index: 5;
+            transition: height 0.5s ease;
+        }
+
+        /* Awan */
+        .cloud-container {
+            position: absolute;
+            top: 30px;
+            left: 30%;
+            width: 150px;
+            height: 60px;
+            opacity: 0;
+            transition: all 1s ease;
+            transform: scale(0.5);
+            z-index: 15;
+        }
+        .cloud-part {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            transition: background 1s ease;
+        }
+        .cloud-part:nth-child(1) { width: 70px; height: 70px; bottom: 0; left: 10px; }
+        .cloud-part:nth-child(2) { width: 90px; height: 90px; bottom: 10px; left: 40px; }
+        .cloud-part:nth-child(3) { width: 70px; height: 70px; bottom: 0; right: 10px; }
+
+        /* Animasi Uap Air & Hujan */
+        .vapor {
+            position: absolute;
+            bottom: 25%;
+            width: 4px;
+            height: 20px;
+            background-color: rgba(255, 255, 255, 0.6);
+            border-radius: 2px;
+            animation: rise 2s infinite linear;
+            opacity: 0;
+            z-index: 6;
+        }
+        @keyframes rise {
+            0% { transform: translateY(0) scaleY(1); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(-150px) scaleY(2); opacity: 0; }
+        }
+        .rain {
+            position: absolute;
+            width: 2px;
+            height: 15px;
+            background-color: #3b82f6;
+            animation: fall 0.5s infinite linear;
+            opacity: 0;
+            z-index: 14;
+        }
+        @keyframes fall {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(200px); opacity: 0; }
+        }
+
+        /* Custom Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #d97706;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.3);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 8px;
+            cursor: pointer;
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        /* Navigasi & Tampilan */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Drag and drop kuis */
+        .draggable-item { cursor: grab; user-select: none; touch-action: none; }
+        .draggable-item:active { cursor: grabbing; }
+        .dragging { opacity: 0.5; transform: scale(1.05); }
+        .drop-zone { min-height: 50px; min-width: 150px; border: 2px dashed #cbd5e1; transition: all 0.3s ease; }
+
+        /* Marquee Halaman Sampul */
+        .marquee-container {
+            width: 100%; overflow: hidden; white-space: nowrap; background: #d97706; color: white;
+            padding: 10px 0; position: absolute; top: 0; left: 0; z-index: 50;
+        }
+        .marquee-content {
+            display: inline-block; padding-left: 100%; animation: marquee 25s linear infinite;
+        }
+        @keyframes marquee { 0% { transform: translate(0, 0); } 100% { transform: translate(-100%, 0); } }
+        #splash-screen { transition: opacity 0.5s ease; }
+    </style>
+</head>
+<body class="text-gray-800 antialiased bg-gray-50">
+
+    <div id="splash-screen" class="min-h-screen bg-kemenag-green flex flex-col items-center justify-center relative overflow-hidden">
+        
+        <div class="marquee-container shadow-md">
+            <div class="marquee-content font-bold tracking-wide text-sm md:text-base">
+                🌊 SELAMAT DATANG DI MPI SIKLUS AIR - FASE D 🌊 | 💡 Mari jaga kelestarian sumber daya air dan cegah pencemaran di Provinsi Gorontalo! | 📚 Belajar Mandiri, Raih Prestasi Bersama Madrasah Hebat Bermartabat!
+            </div>
+        </div>
+
+        <div class="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white to-transparent pointer-events-none"></div>
+
+        <div class="bg-white p-8 mt-12 rounded-3xl shadow-2xl z-10 max-w-md w-full mx-4 text-center border-t-8 border-kemenag-gold relative">
+            <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto -mt-16 mb-4 border-4 border-white shadow-lg">
+                <span class="text-4xl">🌍</span>
+            </div>
+            <h1 class="text-2xl md:text-3xl font-extrabold text-kemenag-green mb-2">MPI IPA Terpadu</h1>
+            <p class="text-gray-600 mb-8 font-medium">Siklus Air & Konservasi Lingkungan</p>
+            
+            <div class="space-y-4">
+                <button onclick="startApp()" class="w-full bg-kemenag-gold hover:bg-yellow-600 text-white font-bold py-4 rounded-xl shadow-lg transition duration-300 transform hover:-translate-y-1 hover:shadow-xl text-lg flex justify-center items-center gap-2">
+                    <span>Mulai Belajar</span>
+                    <span class="text-xl">🚀</span>
+                </button>
+                
+                <div class="grid grid-cols-2 gap-3 mt-4">
+                    <button onclick="openModal('modal-tujuan')" class="bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold py-3 px-2 rounded-xl border border-blue-200 transition text-sm flex flex-col items-center gap-1">
+                        <span class="text-xl">🎯</span> Tujuan
+                    </button>
+                    <button onclick="openModal('modal-referensi')" class="bg-green-50 hover:bg-green-100 text-green-700 font-semibold py-3 px-2 rounded-xl border border-green-200 transition text-sm flex flex-col items-center gap-1">
+                        <span class="text-xl">📚</span> Referensi
+                    </button>
+                    <button onclick="openModal('modal-pengembang')" class="col-span-2 bg-gray-50 hover:bg-gray-100 text-gray-700 font-semibold py-3 px-2 rounded-xl border border-gray-200 transition text-sm flex justify-center items-center gap-2">
+                        <span class="text-xl">👤</span> Informasi Pengembang
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modals -->
+        <div id="modal-tujuan" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 hidden opacity-0 transition-opacity duration-300 px-4">
+            <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full transform scale-95 transition-transform duration-300">
+                <h3 class="text-xl font-bold text-blue-700 mb-4 border-b-2 border-blue-300 pb-2 flex items-center gap-2"><span class="text-2xl">🎯</span> Tujuan Pembelajaran</h3>
+                <ul class="text-left text-gray-700 text-sm space-y-2 list-disc pl-5">
+                    <li>Siswa dapat mengidentifikasi setiap tahapan siklus air (Hidrologi).</li>
+                    <li>Siswa mampu menganalisis pengaruh perubahan suhu terhadap proses evaporasi dan presipitasi secara interaktif.</li>
+                    <li>Siswa menyadari pentingnya pelestarian sumber air bersih bagi ekosistem lokal di Gorontalo.</li>
+                </ul>
+                <button onclick="closeModal('modal-tujuan')" class="mt-6 w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 rounded-xl transition">Tutup</button>
+            </div>
+        </div>
+
+        <div id="modal-referensi" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 hidden opacity-0 transition-opacity duration-300 px-4">
+            <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full transform scale-95 transition-transform duration-300">
+                <h3 class="text-xl font-bold text-green-700 mb-4 border-b-2 border-green-300 pb-2 flex items-center gap-2"><span class="text-2xl">📚</span> Referensi Materi</h3>
+                <ul class="text-left text-gray-700 text-sm space-y-2 list-disc pl-5">
+                    <li>Buku Panduan Guru & Siswa Ilmu Pengetahuan Alam (IPA) Fase D Kemdikbudristek RI.</li>
+                    <li>Modul Pembelajaran Kemenag RI Tingkat MTs.</li>
+                    <li>Literasi Ekosistem Perairan (Danau Limboto & Sungai Bone).</li>
+                </ul>
+                <button onclick="closeModal('modal-referensi')" class="mt-6 w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 rounded-xl transition">Tutup</button>
+            </div>
+        </div>
+
+        <div id="modal-pengembang" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 hidden opacity-0 transition-opacity duration-300 px-4">
+            <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full transform scale-95 transition-transform duration-300">
+                <h3 class="text-xl font-bold text-gray-800 mb-4 border-b-2 border-gray-300 pb-2 flex items-center gap-2"><span class="text-2xl">👤</span> Profil Pengembang</h3>
+                <div class="text-left text-gray-700 text-sm bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-inner">
+                    <div class="mb-4 flex justify-center">
+                        <a href="https://freeimage.host/i/na4zkQa" target="_blank" rel="noopener noreferrer">
+                            <img src="https://iili.io/na4zkQa.md.jpg" alt="Profil Pengembang" class="w-28 h-28 object-cover rounded-full border-4 border-kemenag-green shadow-md transition-transform duration-300 hover:scale-105">
+                        </a>
+                    </div>
+                    <div class="space-y-3">
+                        <p><span class="block text-xs text-gray-500 font-bold uppercase tracking-wider">Nama:</span> <strong class="text-base text-kemenag-green">Rahmat Djafar</strong></p>
+                        <p><span class="block text-xs text-gray-500 font-bold uppercase tracking-wider">Instansi:</span> <strong class="text-base">MTs Gorontalo</strong></p>
+                        <p><span class="block text-xs text-gray-500 font-bold uppercase tracking-wider">Email:</span> <a href="mailto:rahmat937@guru.sma.belajar.id" class="text-blue-600 underline break-all font-medium">rahmat937@guru.sma.belajar.id</a></p>
+                    </div>
+                </div>
+                <button onclick="closeModal('modal-pengembang')" class="mt-6 w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 rounded-xl transition">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-app" class="hidden min-h-screen pb-10">
+        <header class="bg-kemenag-green text-white shadow-lg border-b-4 border-kemenag-gold sticky top-0 z-40">
+            <div class="max-w-5xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                <h1 class="text-xl md:text-2xl font-bold flex items-center gap-2">
+                    <span>🌍</span> MPI Siklus Air - Fase D
+                </h1>
+                <nav class="flex space-x-2 bg-black/10 p-1 rounded-xl">
+                    <button id="btn-materi" onclick="openTab('materi')" class="tab-btn active bg-white text-kemenag-green font-bold py-2 px-6 rounded-lg transition-all shadow-sm">Simulasi</button>
+                    <button id="btn-kuis" onclick="openTab('kuis')" class="tab-btn text-white hover:bg-white/20 font-bold py-2 px-6 rounded-lg transition-all">Kuis Interaktif</button>
+                </nav>
+            </div>
+        </header>
+
+        <main class="max-w-5xl mx-auto px-4 mt-8">
+            <!-- Tab Simulasi -->
+            <section id="materi" class="tab-content active bg-white rounded-2xl shadow-lg p-6 md:p-8 mb-8 border border-gray-100">
+                <div class="mb-6">
+                    <h2 class="text-2xl font-bold text-kemenag-green mb-2">Simulasi Interaktif Siklus Air</h2>
+                    <p class="text-gray-600">Geser tuas suhu (slider) di bawah ini untuk mengamati langsung proses evaporasi, kondensasi, dan presipitasi yang terjadi di lingkungan (seperti Danau Limboto / Laut Sulawesi).</p>
+                </div>
+
+                <div id="sim-canvas" class="mb-6 relative shadow-inner">
+                    <div id="sim-sun" class="sun"></div>
+                    <div id="sim-cloud" class="cloud-container">
+                        <div class="cloud-part"></div><div class="cloud-part"></div><div class="cloud-part"></div>
+                    </div>
+                    <div id="vapor-layer" class="absolute inset-0 z-0 overflow-hidden pointer-events-none"></div>
+                    <div id="rain-layer" class="absolute inset-0 z-0 overflow-hidden pointer-events-none"></div>
+                    <div class="land shadow-lg"></div>
+                    <div class="water shadow-lg"></div>
+                </div>
+
+                <div class="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm mb-6">
+                    <label for="temp-slider" class="block text-gray-700 font-bold mb-4 flex justify-between items-center">
+                        <span>Tingkat Suhu Panas Matahari:</span>
+                        <span id="temp-display" class="bg-kemenag-gold text-white px-4 py-1 rounded-full text-lg font-bold shadow-md">25°C</span>
+                    </label>
+                    <input type="range" id="temp-slider" min="15" max="100" value="25" class="w-full">
+                    <div class="flex justify-between text-xs text-gray-500 mt-2 font-semibold">
+                        <span>Sejuk (15°C)</span><span>Normal (30°C)</span><span>Panas (60°C)</span><span>Sangat Panas (100°C)</span>
+                    </div>
+                </div>
+
+                <div class="flex items-start bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg shadow-sm">
+                    <span class="text-2xl mr-3">💡</span>
+                    <div>
+                        <h4 class="font-bold text-blue-800">Analisis Proses:</h4>
+                        <p id="sim-feedback" class="text-blue-900 mt-1 transition-opacity duration-300">Suhu saat ini tergolong sejuk. Air di permukaan bumi dalam keadaan tenang.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab Kuis -->
+            <section id="kuis" class="tab-content bg-white rounded-2xl shadow-lg p-6 md:p-8">
+                <h2 class="text-2xl font-bold text-kemenag-green mb-2">Uji Pemahaman</h2>
+                
+                <!-- Biodata Kuis -->
+                <div id="quiz-intro" class="space-y-6">
+                    <p class="text-gray-600 mb-6">Silakan lengkapi data diri Anda sebelum memulai evaluasi. Hasil Anda akan direkam otomatis oleh sistem database Bapak/Ibu Guru.</p>
+                    <div class="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm max-w-md mx-auto">
+                        <div class="mb-4">
+                            <label for="student-name" class="block text-gray-700 font-bold mb-2">Nama Lengkap:</label>
+                            <input type="text" id="student-name" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-kemenag-green" placeholder="Masukkan nama Anda">
+                        </div>
+                        <div class="mb-6">
+                            <label for="student-class" class="block text-gray-700 font-bold mb-2">Kelas:</label>
+                            <select id="student-class" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-kemenag-green">
+                                <option value="">Pilih Kelas</option>
+                                <option value="VII A">VII A</option>
+                                <option value="VII B">VII B</option>
+                                <option value="VII C">VII C</option>
+                                <option value="VII D">VII D</option>
+                            </select>
+                        </div>
+                        <button onclick="startQuiz()" class="w-full bg-kemenag-green hover:bg-green-800 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition duration-300">
+                            Mulai Kuis 🚀
+                        </button>
+                        <p id="quiz-error-intro" class="text-red-500 text-sm font-bold mt-3 text-center hidden">Harap isi nama dan kelas terlebih dahulu!</p>
+                    </div>
+                </div>
+
+                <!-- Soal Kuis Aktif -->
+                <div id="quiz-active" class="hidden space-y-6">
+                    <div class="flex justify-between items-center mb-4 border-b pb-2">
+                        <span id="quiz-student-info" class="font-bold text-kemenag-green"></span>
+                        <span class="bg-kemenag-yellow text-white px-3 py-1 rounded-full text-sm font-bold" id="quiz-progress-text">Soal 1 / 10</span>
+                    </div>
+                    
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+                        <div id="quiz-progress-bar" class="bg-kemenag-green h-2.5 rounded-full transition-all duration-300" style="width: 10%"></div>
+                    </div>
+
+                    <div id="quiz-question-container" class="min-h-[250px]"></div>
+
+                    <div class="mt-8 flex justify-end">
+                        <button id="btn-next-quiz" onclick="handleNextQuestion()" class="bg-kemenag-gold hover:bg-yellow-600 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition duration-300">
+                            Selanjutnya ➡️
+                        </button>
+                    </div>
+                    <p id="quiz-error-answer" class="text-red-500 text-sm font-bold mt-2 text-right hidden">Harap berikan jawaban terlebih dahulu!</p>
+                </div>
+
+                <!-- Loading State (Untuk Pengiriman ke Google Sheets) -->
+                <div id="quiz-loading" class="hidden flex-col items-center justify-center py-12">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-kemenag-green mb-4"></div>
+                    <p class="text-gray-600 font-bold animate-pulse text-lg">Mengirim dan menyimpan hasil ke Database...</p>
+                </div>
+
+                <!-- Hasil Kuis -->
+                <div id="quiz-result" class="hidden mt-6 p-6 rounded-xl border-2 text-center">
+                    <h3 class="text-2xl font-bold mb-2" id="result-title">Hasil Penilaian</h3>
+                    <p id="result-student-info" class="text-lg font-medium text-gray-600 mb-4"></p>
+                    
+                    <div class="text-5xl font-bold text-kemenag-gold mb-4" id="result-score">100</div>
+                    <p id="result-message" class="text-gray-700 mb-6 font-medium"></p>
+                    
+                    <div class="text-left bg-white p-4 rounded-lg shadow-inner border border-gray-100">
+                        <h4 class="font-bold text-gray-800 border-b pb-2 mb-3 flex items-center justify-between">
+                            <span>Pembahasan Lengkap:</span>
+                            <button onclick="togglePembahasan()" id="btn-toggle-pembahasan" class="text-sm text-kemenag-green underline font-normal">Tampilkan</button>
+                        </h4>
+                        <div id="quiz-discussion" class="space-y-4 text-sm text-gray-700 hidden"></div>
+                    </div>
+                    <!-- Tombol Coba Lagi dimatikan secara default agar tidak spam DB, tapi bisa diaktifkan jika perlu -->
+                    <button onclick="resetQuiz()" class="mt-6 text-gray-500 font-bold underline hover:text-kemenag-green transition">Kembali ke Halaman Utama</button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // ==========================================
+        // KONFIGURASI DATABASE GOOGLE APPS SCRIPT
+        // ==========================================
+        // URL Web App dari Google Apps Script yang Anda berikan
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyovUydfBbzjzDOv0C8DRZTQlzOfh53siKgTZwKlcGDHPDqbMIpdBbV00cwr2FliPNFFw/exec';
+
+        // --- Logika Halaman Sampul & Tab ---
+        function startApp() {
+            const splash = document.getElementById('splash-screen');
+            splash.style.opacity = '0';
+            setTimeout(() => {
+                splash.style.display = 'none';
+                document.getElementById('main-app').classList.remove('hidden');
+                window.scrollTo(0, 0); 
+            }, 500);
+        }
+
+        function openModal(id) {
+            const modal = document.getElementById(id);
+            modal.classList.remove('hidden');
+            void modal.offsetWidth;
+            modal.classList.remove('opacity-0');
+            modal.firstElementChild.classList.remove('scale-95');
+        }
+
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            modal.classList.add('opacity-0');
+            modal.firstElementChild.classList.add('scale-95');
+            setTimeout(() => { modal.classList.add('hidden'); }, 300);
+        }
+
+        function openTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-white', 'text-kemenag-green', 'active');
+                btn.classList.add('text-white', 'hover:bg-white/20');
+            });
+            document.getElementById(tabId).classList.add('active');
+            const activeBtn = document.getElementById('btn-' + tabId);
+            activeBtn.classList.remove('text-white', 'hover:bg-white/20');
+            activeBtn.classList.add('bg-white', 'text-kemenag-green', 'active');
+        }
+
+        // --- Logika Simulasi Interaktif ---
+        const slider = document.getElementById('temp-slider');
+        const tempDisplay = document.getElementById('temp-display');
+        const sun = document.getElementById('sim-sun');
+        const cloud = document.getElementById('sim-cloud');
+        const cloudParts = document.querySelectorAll('.cloud-part');
+        const canvas = document.getElementById('sim-canvas');
+        const feedback = document.getElementById('sim-feedback');
+        const vaporLayer = document.getElementById('vapor-layer');
+        const rainLayer = document.getElementById('rain-layer');
+
+        function createVapors() {
+            vaporLayer.innerHTML = '';
+            for(let i=0; i<10; i++) {
+                const vapor = document.createElement('div');
+                vapor.classList.add('vapor');
+                vapor.style.left = (Math.random() * 80 + 10) + '%';
+                vapor.style.animationDelay = (Math.random() * 2) + 's';
+                vaporLayer.appendChild(vapor);
+            }
+        }
+
+        function createRain() {
+            rainLayer.innerHTML = '';
+            for(let i=0; i<30; i++) {
+                const drop = document.createElement('div');
+                drop.classList.add('rain');
+                drop.style.left = (Math.random() * 30 + 35) + '%';
+                drop.style.animationDelay = (Math.random() * 0.5) + 's';
+                rainLayer.appendChild(drop);
+            }
+        }
+
+        createVapors();
+        createRain();
+
+        slider.addEventListener('input', function() {
+            const temp = parseInt(this.value);
+            tempDisplay.innerText = temp + '°C';
+            updateSimulation(temp);
+        });
+
+        function updateSimulation(temp) {
+            if (temp < 35) {
+                sun.style.backgroundColor = '#fbbf24';
+                sun.style.boxShadow = '0 0 40px #fbbf24';
+                canvas.style.background = 'linear-gradient(to bottom, #87CEEB 0%, #E0F6FF 100%)';
+            } else {
+                sun.style.backgroundColor = '#f97316';
+                sun.style.boxShadow = '0 0 60px #ea580c';
+                canvas.style.background = 'linear-gradient(to bottom, #7dd3fc 0%, #bae6fd 100%)';
+            }
+
+            if (temp <= 30) {
+                vaporLayer.style.display = 'none'; rainLayer.style.display = 'none';
+                cloud.style.opacity = '0'; cloud.style.transform = 'scale(0.5)';
+                cloudParts.forEach(p => p.style.background = 'white');
+                feedback.innerHTML = "Suhu normal ("+temp+"°C). Air di permukaan seperti perairan laut Gorontalo dalam keadaan tenang.";
+            } else if (temp > 30 && temp <= 60) {
+                vaporLayer.style.display = 'block'; rainLayer.style.display = 'none';
+                cloud.style.opacity = '0.5'; cloud.style.transform = 'scale(0.8)';
+                cloudParts.forEach(p => p.style.background = 'white');
+                feedback.innerHTML = "Panas matahari meningkat ("+temp+"°C)! Terjadi <strong>Evaporasi</strong> (penguapan). Molekul air bergerak cepat dan menguap menjadi gas naik ke udara.";
+            } else if (temp > 60 && temp <= 80) {
+                vaporLayer.style.display = 'block'; rainLayer.style.display = 'none';
+                cloud.style.opacity = '1'; cloud.style.transform = 'scale(1.2)';
+                cloudParts.forEach(p => p.style.background = '#9ca3af');
+                feedback.innerHTML = "Suhu tinggi memicu penguapan masif. Uap air yang naik mengalami pendinginan di atmosfer dan membentuk awan kelabu. Ini disebut <strong>Kondensasi</strong>.";
+            } else if (temp > 80) {
+                vaporLayer.style.display = 'block'; rainLayer.style.display = 'block';
+                cloud.style.opacity = '1'; cloud.style.transform = 'scale(1.4)';
+                cloudParts.forEach(p => p.style.background = '#4b5563');
+                feedback.innerHTML = "Awan sudah terlalu berat dan tidak sanggup menahan uap air. Terjadi <strong>Presipitasi</strong> (Hujan)! Air jatuh kembali ke bumi dan sebagian diserap tanah (<strong>Infiltrasi</strong>).";
+            }
+        }
+        updateSimulation(25);
+
+        // --- Logika Kuis Data & Eksekusi ---
+        const quizData = [
+            { type: 'pg', q: "Proses menguapnya air laut di Teluk Tomini akibat panas matahari yang terik disebut...", options: ["A. Presipitasi", "B. Kondensasi", "C. Evaporasi", "D. Infiltrasi"], answer: 2, pembahasan: "Evaporasi adalah proses perubahan air di permukaan bumi menjadi uap air karena energi panas dari matahari." },
+            { type: 'tf', q: "Benar atau Salah: Kondensasi adalah proses meresapnya air hujan ke dalam pori-pori tanah.", options: ["Benar", "Salah"], answer: 1, pembahasan: "Salah. Kondensasi adalah pengembunan uap air menjadi awan. Meresapnya air hujan ke tanah disebut Infiltrasi." },
+            { type: 'mcma', q: "Manakah dari berikut ini yang merupakan cara menjaga ketersediaan air bersih dan siklus air di Gorontalo? (Pilih 2 jawaban benar)", options: ["Menanam pohon di daerah tangkapan air", "Membuang limbah ke Sungai Bone", "Menjaga kelestarian Danau Limboto", "Menebang hutan secara liar"], answer: [0, 2], pembahasan: "Menanam pohon dan menjaga danau adalah langkah konservasi. Membuang sampah dan menebang pohon merusak siklus air dan lingkungan." },
+            { type: 'dragdrop', q: "Tarik istilah yang tepat ke dalam kotak yang sesuai dengan deskripsinya!", dropzoneLabels: ["Air hujan yang jatuh ke permukaan bumi:", "Uap air yang mendingin dan membentuk awan:"], draggables: ["Kondensasi", "Evaporasi", "Presipitasi"], answer: ["Presipitasi", "Kondensasi"], pembahasan: "Hujan yang turun ke bumi disebut Presipitasi. Uap air yang menjadi awan disebut Kondensasi." },
+            { type: 'pg', q: "Fungsi utama akar pepohonan di kawasan perbukitan Gorontalo dalam siklus air adalah...", options: ["A. Menghentikan proses evaporasi", "B. Menyimpan air hujan dan memperbesar infiltrasi", "C. Membuat air langsung mengalir ke laut", "D. Mencegah terjadinya kondensasi"], answer: 1, pembahasan: "Akar pepohonan sangat efektif mencengkeram tanah dan menyerap air hujan (infiltrasi), sehingga air tersimpan sebagai air tanah dan mencegah banjir." },
+            { type: 'tf', q: "Benar atau Salah: Penguapan air yang terjadi melalui stomata (permukaan daun) tumbuh-tumbuhan disebut Transpirasi.", options: ["Benar", "Salah"], answer: 0, pembahasan: "Benar. Transpirasi adalah proses hilangnya air dalam bentuk uap air dari jaringan hidup tanaman, terutama melalui daun." },
+            { type: 'mcma', q: "Apa dampak negatif jika kawasan resapan air dan hutan di Gorontalo berkurang drastis? (Pilih 2 jawaban benar)", options: ["Tingkat infiltrasi menurun", "Risiko kekeringan saat musim kemarau meningkat", "Curah hujan akan selalu meningkat tajam", "Siklus air akan berhenti total"], answer: [0, 1], pembahasan: "Tanpa area resapan, air tidak bisa masuk ke tanah (infiltrasi turun), menyebabkan banjir saat hujan dan kekeringan saat kemarau." },
+            { type: 'dragdrop', q: "Urutkan tahapan awal siklus air berikut secara berurutan!", dropzoneLabels: ["Tahap 1 (Panas Matahari):", "Tahap 2 (Di Atmosfer):", "Tahap 3 (Kembali ke Bumi):"], draggables: ["Presipitasi", "Evaporasi", "Kondensasi"], answer: ["Evaporasi", "Kondensasi", "Presipitasi"], pembahasan: "Urutannya: Air menguap (Evaporasi), kemudian mendingin menjadi awan (Kondensasi), lalu jatuh sebagai hujan (Presipitasi)." },
+            { type: 'pg', q: "Air hujan yang jatuh ke daratan sebagian akan diserap tanah menjadi cadangan air tanah. Proses ini disebut...", options: ["A. Evaporasi", "B. Infiltrasi", "C. Sublimasi", "D. Transpirasi"], answer: 1, pembahasan: "Infiltrasi adalah proses meresapnya air permukaan ke dalam pori-pori tanah." },
+            { type: 'tf', q: "Benar atau Salah: Adanya siklus air menyebabkan volume total air di bumi selalu bertambah setiap tahunnya.", options: ["Benar", "Salah"], answer: 1, pembahasan: "Salah. Siklus air adalah perputaran, sehingga volume total air di bumi relatif tetap, hanya wujud dan tempatnya saja yang berubah." }
+        ];
+
+        let currentQuestionIndex = 0;
+        let studentData = { name: '', class: '' };
+        let userAnswers = [];
+        let score = 0;
+
+        function startQuiz() {
+            const nameInput = document.getElementById('student-name').value.trim();
+            const classInput = document.getElementById('student-class').value;
+            const errorMsg = document.getElementById('quiz-error-intro');
+
+            if(nameInput === '' || classInput === '') {
+                errorMsg.classList.remove('hidden'); return;
+            }
+
+            errorMsg.classList.add('hidden');
+            studentData.name = nameInput; studentData.class = classInput;
+            document.getElementById('quiz-intro').classList.add('hidden');
+            document.getElementById('quiz-active').classList.remove('hidden');
+            document.getElementById('quiz-student-info').innerText = `${studentData.name} - ${studentData.class}`;
+            
+            currentQuestionIndex = 0; userAnswers = []; score = 0;
+            renderQuestion();
+        }
+
+        function renderQuestion() {
+            const container = document.getElementById('quiz-question-container');
+            const qData = quizData[currentQuestionIndex];
+            container.innerHTML = '';
+            document.getElementById('quiz-error-answer').classList.add('hidden');
+
+            document.getElementById('quiz-progress-text').innerText = `Soal ${currentQuestionIndex + 1} / ${quizData.length}`;
+            document.getElementById('quiz-progress-bar').style.width = `${((currentQuestionIndex + 1) / quizData.length) * 100}%`;
+
+            const qTitle = document.createElement('p');
+            qTitle.className = 'text-lg font-bold text-gray-800 mb-4';
+            qTitle.innerText = `${currentQuestionIndex + 1}. ${qData.q}`;
+            container.appendChild(qTitle);
+
+            if (qData.type === 'pg' || qData.type === 'tf') {
+                qData.options.forEach((opt, index) => {
+                    const label = document.createElement('label');
+                    label.className = 'flex items-center p-3 mb-2 bg-gray-50 border rounded-lg cursor-pointer hover:bg-green-50 transition';
+                    label.innerHTML = `<input type="radio" name="q${currentQuestionIndex}" value="${index}" class="w-5 h-5 text-kemenag-green focus:ring-kemenag-green"><span class="ml-3 text-gray-700">${opt}</span>`;
+                    container.appendChild(label);
+                });
+            } else if (qData.type === 'mcma') {
+                qData.options.forEach((opt, index) => {
+                    const label = document.createElement('label');
+                    label.className = 'flex items-center p-3 mb-2 bg-gray-50 border rounded-lg cursor-pointer hover:bg-green-50 transition';
+                    label.innerHTML = `<input type="checkbox" name="q${currentQuestionIndex}" value="${index}" class="w-5 h-5 text-kemenag-green focus:ring-kemenag-green rounded"><span class="ml-3 text-gray-700">${opt}</span>`;
+                    container.appendChild(label);
+                });
+            } else if (qData.type === 'dragdrop') {
+                const ddContainer = document.createElement('div');
+                ddContainer.className = 'space-y-4';
+
+                const dragBank = document.createElement('div');
+                dragBank.id = 'drag-container';
+                dragBank.className = 'flex flex-wrap gap-2 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg min-h-[70px] transition-all';
+                let shuffledDrags = [...qData.draggables].sort(() => Math.random() - 0.5);
+                shuffledDrags.forEach((dragText) => {
+                    const dragItem = document.createElement('div');
+                    dragItem.className = 'draggable-item bg-white px-4 py-2 border-2 border-gray-300 rounded-lg shadow-sm font-bold text-kemenag-green';
+                    dragItem.draggable = true; dragItem.innerText = dragText;
+                    dragBank.appendChild(dragItem);
+                });
+                ddContainer.appendChild(dragBank);
+
+                qData.dropzoneLabels.forEach((labelTxt) => {
+                    const zoneRow = document.createElement('div');
+                    zoneRow.className = 'flex flex-col md:flex-row md:items-center justify-between bg-gray-50 p-3 border rounded-lg';
+                    const labelSpan = document.createElement('span');
+                    labelSpan.className = 'font-semibold text-gray-700 mb-2 md:mb-0 md:w-1/2';
+                    labelSpan.innerText = labelTxt;
+                    const dropZone = document.createElement('div');
+                    dropZone.className = 'drop-zone flex items-center justify-center bg-gray-100 rounded-lg w-full md:w-1/2 relative';
+                    zoneRow.appendChild(labelSpan); zoneRow.appendChild(dropZone);
+                    ddContainer.appendChild(zoneRow);
+                });
+                container.appendChild(ddContainer);
+                setupDragAndDrop();
+            }
+
+            const nextBtn = document.getElementById('btn-next-quiz');
+            if (currentQuestionIndex === quizData.length - 1) {
+                nextBtn.innerHTML = 'Kumpulkan Kuis & Simpan 📝';
+                nextBtn.classList.replace('bg-kemenag-gold', 'bg-kemenag-green');
+                nextBtn.classList.replace('hover:bg-yellow-600', 'hover:bg-green-800');
+            } else {
+                nextBtn.innerHTML = 'Selanjutnya ➡️';
+                nextBtn.classList.replace('bg-kemenag-green', 'bg-kemenag-gold');
+                nextBtn.classList.replace('hover:bg-green-800', 'hover:bg-yellow-600');
+            }
+        }
+
+        function setupDragAndDrop() {
+            const draggables = document.querySelectorAll('.draggable-item');
+            const dropzones = document.querySelectorAll('.drop-zone');
+            const dragContainer = document.getElementById('drag-container');
+
+            draggables.forEach(draggable => {
+                draggable.addEventListener('dragstart', () => draggable.classList.add('dragging'));
+                draggable.addEventListener('dragend', () => draggable.classList.remove('dragging'));
+                draggable.addEventListener('touchstart', (e) => { draggable.classList.add('dragging'); }, {passive: true});
+                draggable.addEventListener('touchmove', (e) => {
+                    e.preventDefault(); 
+                    const touch = e.targetTouches[0];
+                    draggable.style.position = 'fixed';
+                    draggable.style.left = touch.clientX - draggable.offsetWidth / 2 + 'px';
+                    draggable.style.top = touch.clientY - draggable.offsetHeight / 2 + 'px';
+                    draggable.style.zIndex = '1000'; draggable.style.pointerEvents = 'none'; 
+                }, {passive: false});
+                draggable.addEventListener('touchend', (e) => {
+                    draggable.classList.remove('dragging');
+                    draggable.style.position = ''; draggable.style.left = ''; draggable.style.top = ''; draggable.style.zIndex = ''; draggable.style.pointerEvents = '';
+                    const touch = e.changedTouches[0];
+                    const dropTarget = document.elementFromPoint(touch.clientX, touch.clientY);
+                    if (dropTarget) {
+                        const zone = dropTarget.closest('.drop-zone');
+                        const bank = dropTarget.closest('#drag-container');
+                        if (zone) {
+                            if (zone.children.length === 0) zone.appendChild(draggable);
+                            else dragContainer.appendChild(draggable); 
+                        } else if (bank) { dragContainer.appendChild(draggable); } 
+                        else { dragContainer.appendChild(draggable); }
+                    } else { dragContainer.appendChild(draggable); }
+                });
+            });
+
+            dropzones.forEach(zone => {
+                zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('bg-blue-100', 'border-blue-400'); });
+                zone.addEventListener('dragleave', () => { zone.classList.remove('bg-blue-100', 'border-blue-400'); });
+                zone.addEventListener('drop', e => {
+                    e.preventDefault(); zone.classList.remove('bg-blue-100', 'border-blue-400');
+                    const draggable = document.querySelector('.dragging');
+                    if (draggable && zone.children.length === 0) zone.appendChild(draggable);
+                });
+            });
+            
+            dragContainer.addEventListener('dragover', e => e.preventDefault());
+            dragContainer.addEventListener('drop', e => {
+                e.preventDefault();
+                const draggable = document.querySelector('.dragging');
+                if (draggable) dragContainer.appendChild(draggable);
+            });
+        }
+
+        function handleNextQuestion() {
+            const qData = quizData[currentQuestionIndex];
+            const errorMsg = document.getElementById('quiz-error-answer');
+            let answered = false;
+            let isCorrect = false;
+            let userAnswerText = "";
+
+            if (qData.type === 'pg' || qData.type === 'tf') {
+                const selected = document.querySelector(`input[name="q${currentQuestionIndex}"]:checked`);
+                if (selected) {
+                    answered = true;
+                    isCorrect = parseInt(selected.value) === qData.answer;
+                    userAnswerText = qData.options[parseInt(selected.value)];
+                }
+            } else if (qData.type === 'mcma') {
+                const selected = document.querySelectorAll(`input[name="q${currentQuestionIndex}"]:checked`);
+                if (selected.length > 0) {
+                    answered = true;
+                    let userAnswerData = Array.from(selected).map(cb => parseInt(cb.value));
+                    if (userAnswerData.length === qData.answer.length && userAnswerData.every(val => qData.answer.includes(val))) {
+                        isCorrect = true;
+                    }
+                    userAnswerText = Array.from(selected).map(cb => qData.options[parseInt(cb.value)]).join(', ');
+                }
+            } else if (qData.type === 'dragdrop') {
+                const dropzones = document.querySelectorAll('.drop-zone');
+                let dndAnswers = [];
+                let allFilled = true;
+                dropzones.forEach(dz => {
+                    if (dz.children.length > 0) dndAnswers.push(dz.children[0].innerText.trim());
+                    else allFilled = false;
+                });
+
+                if (allFilled && dropzones.length > 0) {
+                    answered = true;
+                    isCorrect = dndAnswers.every((val, index) => val === qData.answer[index]);
+                    userAnswerText = dndAnswers.join(', ');
+                }
+            }
+
+            if (!answered) {
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+
+            if (isCorrect) score += 10; 
+            
+            // Simpan detail untuk dikirim ke Google Sheets
+            userAnswers.push({ 
+                q: qData.q, 
+                isCorrect: isCorrect, 
+                pembahasan: qData.pembahasan,
+                userAnswerText: userAnswerText
+            });
+
+            currentQuestionIndex++;
+
+            if (currentQuestionIndex < quizData.length) {
+                renderQuestion();
+            } else {
+                finishQuizAndSaveToDatabase();
+            }
+        }
+
+        // --- Logika Koneksi Fetch & Hasil ---
+        function finishQuizAndSaveToDatabase() {
+            // Sembunyikan panel kuis, tampilkan indikator loading
+            document.getElementById('quiz-active').classList.add('hidden');
+            const loadingPanel = document.getElementById('quiz-loading');
+            loadingPanel.classList.remove('hidden');
+            loadingPanel.classList.add('flex');
+
+            let correctCount = userAnswers.filter(a => a.isCorrect).length;
+            let incorrectCount = userAnswers.length - correctCount;
+
+            const payload = {
+                name: studentData.name,
+                class: studentData.class,
+                score: score,
+                correctCount: correctCount,
+                incorrectCount: incorrectCount,
+                answers: userAnswers,
+                quizData: quizData // Digunakan GAS untuk membuat otomatis tabel Sheet "Soal" jika belum ada
+            };
+
+            // Mengirim data ke Google Sheets App Script (Menghindari CORS menggunakan text/plain)
+            fetch(SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadingPanel.classList.add('hidden');
+                loadingPanel.classList.remove('flex');
+                showResultScreen(); // Tetap tampilkan hasil bila berhasil
+            })
+            .catch(error => {
+                console.error("Gagal terhubung ke Database:", error);
+                loadingPanel.classList.add('hidden');
+                loadingPanel.classList.remove('flex');
+                alert("Peringatan: Gagal menyimpan data siswa ke database. Pastikan perangkat memiliki koneksi internet. Hasil nilai kuis tetap akan ditampilkan di layar.");
+                showResultScreen(); // Tetap tampilkan hasil meski jaringan offline
+            });
+        }
+
+        function showResultScreen() {
+            const resultDiv = document.getElementById('quiz-result');
+            resultDiv.classList.remove('hidden');
+
+            document.getElementById('result-student-info').innerText = `Nama: ${studentData.name} | Kelas: ${studentData.class}`;
+            document.getElementById('result-score').innerText = score;
+            
+            const resultMsg = document.getElementById('result-message');
+            resultDiv.classList.remove('border-green-500', 'border-yellow-500', 'border-red-500', 'bg-green-50', 'bg-yellow-50', 'bg-red-50');
+
+            if (score >= 80) {
+                resultMsg.innerText = "Luar Biasa! Pemahaman Anda sangat sempurna! 🌟";
+                resultDiv.classList.add('border-green-500', 'bg-green-50');
+            } else if (score >= 60) {
+                resultMsg.innerText = "Bagus! Pemahaman Anda sudah baik, tingkatkan lagi! 👍";
+                resultDiv.classList.add('border-yellow-500', 'bg-yellow-50');
+            } else {
+                resultMsg.innerText = "Jangan menyerah! Pelajari kembali materinya dan coba lagi. 💪";
+                resultDiv.classList.add('border-red-500', 'bg-red-50');
+            }
+
+            // Render Pembahasan
+            const discContainer = document.getElementById('quiz-discussion');
+            discContainer.innerHTML = '';
+            userAnswers.forEach((ans, index) => {
+                const statusColor = ans.isCorrect ? 'text-green-600' : 'text-red-600';
+                const statusIcon = ans.isCorrect ? '✅ Benar' : '❌ Salah';
+                
+                discContainer.innerHTML += `
+                    <div class="border-b border-gray-200 pb-3 mt-3">
+                        <p class="font-bold text-gray-800">Soal ${index + 1}</p>
+                        <p class="${statusColor} font-semibold mb-1">${statusIcon} (Jawabanmu: ${ans.userAnswerText})</p>
+                        <p class="text-gray-600"><strong>Pembahasan:</strong> ${ans.pembahasan}</p>
+                    </div>
+                `;
+            });
+            discContainer.classList.add('hidden');
+            document.getElementById('btn-toggle-pembahasan').innerText = 'Tampilkan';
+        }
+
+        function togglePembahasan() {
+            const discContainer = document.getElementById('quiz-discussion');
+            const btn = document.getElementById('btn-toggle-pembahasan');
+            if(discContainer.classList.contains('hidden')) {
+                discContainer.classList.remove('hidden'); btn.innerText = 'Sembunyikan';
+            } else {
+                discContainer.classList.add('hidden'); btn.innerText = 'Tampilkan';
+            }
+        }
+
+        function resetQuiz() {
+            // Kembali ke panel mulai belajar daripada mereset kuis untuk menghindari spam data.
+            document.getElementById('main-app').classList.add('hidden');
+            document.getElementById('splash-screen').style.display = 'flex';
+            setTimeout(() => { document.getElementById('splash-screen').style.opacity = '1'; }, 50);
+            
+            // Bersihkan State Kuis
+            document.getElementById('quiz-result').classList.add('hidden');
+            document.getElementById('quiz-intro').classList.remove('hidden');
+            document.getElementById('student-name').value = '';
+            document.getElementById('student-class').value = '';
+            openTab('materi');
+        }
+    </script>
+</body>
+</html>
